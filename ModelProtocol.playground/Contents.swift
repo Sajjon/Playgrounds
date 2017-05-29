@@ -18,7 +18,9 @@ protocol JSONSerializable {
     func toJSON() -> JSON
 }
 
-protocol UserModel: JSONDeserializable {
+typealias JSONElement = JSONDeserializable & JSONSerializable
+
+protocol UserModel: JSONElement {
     var username: String { get }
     var firstname: String { get }
     var lastname: String { get }
@@ -31,6 +33,7 @@ protocol UserModel: JSONDeserializable {
     )
 }
 
+//MARK: JSONDeserializable
 extension UserModel {
     init(json: JSON) throws {
         self.init(
@@ -42,6 +45,17 @@ extension UserModel {
     }
 }
 
+//MARK: JSONSerializable
+extension UserModel {
+    func toJSON() -> JSON {
+        return JSON(json: [
+            "username": username,
+            "firstname": firstname,
+            "lastname": lastname,
+            "country": country
+        ])
+    }
+}
 struct UserStruct: UserModel {
     let username: String
     let firstname: String
@@ -51,7 +65,7 @@ struct UserStruct: UserModel {
 
 class ManagedObject: NSObject {}
 
-final class UserClass: ManagedObject, UserModel {
+final class UserClass: UserModel {
     let username: String
     let firstname: String
     let lastname: String
@@ -75,12 +89,12 @@ let json: JSON = JSON(json: [
     "lastname": "Cyon",
     "country": "Sweden"
     ])
-let u1 = try UserStruct(json: json)
-let u2 = try UserClass(json: json)
-print(u1.username) // prints "Sajjon"
-print(u2.username) // prints "Sajjon"
+let userStructOriginal = try UserStruct(json: json)
+let userClassOriginal = try UserClass(json: json)
+print("foo: \(userStructOriginal.username)")
+print("foo: \(userClassOriginal.username)")
 
-
+/*
 protocol ToStructConvertible: class, JSONSerializable {
     associatedtype ToStruct: JSONDeserializable
     var asStruct: ToStruct { get }
@@ -93,27 +107,26 @@ extension ToStructConvertible {
 }
 
 protocol BaseToClassConvertible {
-    var classType: NSObject.Type { get }
+    var classType: JSONDeserializable.Type { get }
     var asNSObject: NSObject { get }
 }
 
-
 extension BaseToClassConvertible {
     var asNSObject: NSObject {
-        guard let jsonDeserializable = classType as? JSONDeserializable else { fatalError("should be jsondeserializable") }
+        //guard let jsonDeserializable = classType  else { fatalError("should be jsondeserializable") }
         guard let jsonSerializable = self as? JSONSerializable else { fatalError("should be jsonserializable") }
         let json: JSON = jsonSerializable.toJSON()
-        return jsonDeserializable.init(from: json)
+        return try! classType.init(json: json) as! NSObject
     }
 }
 
 protocol ToClassConvertible: BaseToClassConvertible {
-    associatedtype ToClass: NSObject
+    associatedtype ToClass: JSONDeserializable
     var asClass: ToClass { get }
 }
 
 extension ToClassConvertible {
-    var classType: NSObject.Type { return ToClass.self }
+    var classType: JSONDeserializable.Type { return ToClass.self }
     var asClass: ToClass { return self.asNSObject as! ToClass }
 }
 
@@ -128,3 +141,21 @@ extension Repository {
         fatalError()
     }
 }
+
+extension UserStruct: ToClassConvertible {
+    typealias ToClass = UserClass
+}
+
+extension UserClass: ToStructConvertible {
+    typealias ToStruct = UserStruct
+}
+
+let userClassConverted = userStructOriginal.asClass
+let userStructConverted = userClassOriginal.asStruct
+print(userClassConverted)
+print(userStructConverted)
+let userStructDoubleConverted = userClassConverted.asStruct
+let userClassDoubleConverted = userStructConverted.asClass
+print(userStructDoubleConverted)
+print(userClassDoubleConverted)
+ */
