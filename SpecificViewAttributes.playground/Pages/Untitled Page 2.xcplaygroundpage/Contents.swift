@@ -1,3 +1,7 @@
+//: [Previous](@previous)
+
+import UIKit
+
 //: Playground - noun: a place where people can play
 
 import UIKit
@@ -5,11 +9,39 @@ import UIKit
 protocol AnyAttributed {
     func install<S: Styleable>(on styleable: S)
 }
-protocol Attributed: AnyAttributed, ExpressibleByArrayLiteral {
+protocol Attributed: Collection, ExpressibleByArrayLiteral, AnyAttributed {
     associatedtype Attribute: AssociatedValueStrippable
     var attributes: [Attribute] { get }
     init(_ attributes: [Attribute])
     associatedtype Element = Attribute
+    
+    var startIndex: Int { get }
+}
+
+//extension Attributed {
+//    func apply<S: Styleable>(to styleable: )
+//}
+
+extension Attributed {
+    typealias Index = Int
+    typealias Iterator = IndexingIterator<Self>
+    typealias Indices = DefaultIndices<Self>
+    
+    public var endIndex: Int { return count }
+    public var count: Int { return attributes.count }
+    public var isEmpty: Bool { return attributes.isEmpty }
+    
+    public subscript (position: Int) -> Self.Attribute { return attributes[position] }
+    
+    public func index(after index: Int) -> Int {
+        guard index < endIndex else { return endIndex }
+        return index + 1
+    }
+    
+    public func index(before index: Int) -> Int {
+        guard index > startIndex else { return startIndex }
+        return index - 1
+    }
 }
 
 enum ViewAttributes {
@@ -72,6 +104,8 @@ extension ViewAttributesStripped: Equatable, Hashable {
 }
 
 struct ViewStyle: Attributed {
+    var startIndex: Int = 0
+    
     let attributes: [ViewAttributes]
     
     init(_ attributes: [ViewAttributes]) {
@@ -99,18 +133,20 @@ extension ViewStyle {
     }
 }
 
-protocol Styleable: ExpressibleByArrayLiteral {
+protocol Styleable {
     associatedtype Style: Attributed
-    var style: Style { get }
-    init(style: Style)
-    associatedtype Element = Style.Element
+//    var style: Style { get }
+//    init(style: Style)
+//    associatedtype Element = Style.Element
+    func setup(with style: Style)
+//    static func make<S: Styleable>(_ fromStyle: [Style.Attribute]) -> S
 }
 
-extension Styleable {
-    init(arrayLiteral elements: Style.Attribute...) {
-        self.init(style: Style(elements))
-    }
-}
+//extension Styleable {
+//    init(arrayLiteral elements: Style.Attribute...) {
+//        self.init(style: Style(elements))
+//    }
+//}
 
 extension Styleable {
     func setup(with style: Style) {
@@ -123,48 +159,70 @@ protocol TextHolder {
 }
 
 
-enum LabelAttribute {
-    case foo(String)
+enum ButtonAttribute {
+    case enabled(Bool)
 }
 
-struct LabelStyle: AnyAttributed {
-    let attributes: [LabelAttribute]
+struct ButtonStyle: AnyAttributed {
+    let attributes: [ButtonAttribute]
     
-    init(_ attributes: [LabelAttribute]) {
+    init(_ attributes: [ButtonAttribute]) {
         self.attributes = attributes
     }
     
-    init(arrayLiteral elements: LabelAttribute...) {
+    init(arrayLiteral elements: ButtonAttribute...) {
         self.attributes = elements
     }
-    
 }
 
 
-extension LabelStyle {
+extension ButtonStyle {
     func install<S: Styleable>(on styleable: S) {
+        guard let button = styleable as? UIButton else { return }
         attributes.forEach {
             switch $0 {
-            case .foo(let foo):
-                if let label = styleable as? Label {
-                    print("fuck yeah")
-                    label.foo = foo
-                }
+            case .enabled(let enabled):
+                button.isEnabled = enabled
             }
         }
     }
 }
 
-final class Label: TextHolder, Styleable {
-    var text: String?
-    var foo: String?
-    let style: ViewStyle
-    init(style: ViewStyle) {
-        self.style = style
-        setup(with: style)
+extension UILabel: TextHolder {}
+
+extension UILabel: Styleable {
+    typealias Style = ViewStyle
+}
+
+extension UIButton: TextHolder {
+    var text: String? {
+        get { return title(for: .normal) }
+        set { setTitle(newValue, for: .normal) }
     }
 }
 
-let label: Label = [.text("Hej"), .custom(LabelStyle([.foo("bar")]))]
-label.text!
-label.foo!
+extension UIButton: Styleable {
+    typealias Style = ViewStyle
+}
+
+func make(_ fromStyle: [UILabel.Style.Attribute]) -> UILabel {
+    let label = UILabel(frame: .zero)
+    label.setup(with: ViewStyle(fromStyle))
+    return label
+}
+
+func make(_ fromStyle: [UIButton.Style.Attribute]) -> UIButton {
+    let button = UIButton(frame: .zero)
+    button.setup(with: ViewStyle(fromStyle))
+    return button
+}
+
+class MyView {
+    lazy var label: UILabel = make([.text("baz")])
+    lazy var button: UIButton = make([.text("press me"), .custom(ButtonStyle([.enabled(false)]))])
+}
+
+let view = MyView()
+view.label.text!
+view.button.text!
+view.button.isEnabled
